@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>POS Bengkel - Produk & Servis dengan Mekanik</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .suggestion-item:hover {
+            background-color: #d4edda;
+            cursor: pointer;
+        }
+
+        .suggestion-box {
+            position: absolute;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #ccc;
+            width: 100%;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <nav class="navbar navbar-dark bg-success">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">POS Bengkel</span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row g-4">
+            <!-- Pilih Produk -->
+            <div class="col-md-6 position-relative">
+                <h4>Pilih Produk</h4>
+                <input type="text" id="searchProductInput" class="form-control" placeholder="Cari produk..." autocomplete="off" />
+                <div id="productSuggestions" class="suggestion-box d-none"></div>
+                <button class="btn btn-primary mt-2" id="btnAddProduct" disabled>+ Tambahkan ke Keranjang Produk</button>
+
+                <h5 class="mt-4">Keranjang Produk</h5>
+                <table class="table table-bordered table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Produk</th>
+                            <th>Harga</th>
+                            <th>Qty</th>
+                            <th>Total</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cartProductsBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Pilih Servis -->
+            <div class="col-md-6 position-relative">
+                <h4>Pilih Servis</h4>
+                <input type="text" id="searchServiceInput" class="form-control" placeholder="Cari servis..." autocomplete="off" />
+                <div id="serviceSuggestions" class="suggestion-box d-none"></div>
+
+                <div id="mechanicSelectionDiv" class="mt-2" style="display:none;">
+                    <label for="mechanicSelect" class="form-label">Pilih Mekanik</label>
+                    <select id="mechanicSelect" class="form-select"></select>
+                </div>
+                <button class="btn btn-primary mt-2" id="btnAddService" disabled>+ Tambahkan ke Keranjang Servis</button>
+
+                <h5 class="mt-4">Keranjang Servis</h5>
+                <table class="table table-bordered table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Servis</th>
+                            <th>Mekanik</th>
+                            <th>Harga Servis</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cartServicesBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Total & Pembayaran -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="mb-2 w-25">
+                    <label for="discount" class="form-label">Diskon:</label>
+                    <input type="number" id="discount" value="0" class="form-control form-control-sm" />
+                </div>
+
+                <p><strong>Subtotal Produk: </strong><span id="subtotalProducts">Rp0</span></p>
+                <p><strong>Subtotal Servis: </strong><span id="subtotalServices">Rp0</span></p>
+                <p><strong>Total Bayar: </strong><span id="totalBayar">Rp0</span></p>
+
+                <div class="mb-2 w-50">
+                    <label for="bayar" class="form-label">Bayar:</label>
+                    <input type="number" id="bayar" class="form-control form-control-sm" />
+                </div>
+
+                <p><strong>Kembalian: </strong><span id="kembalian">Rp0</span></p>
+
+                <button class="btn btn-success" id="btnCetak">🖨️ Simpan & Cetak</button>
+                <button class="btn btn-danger" id="btnReset">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Produk
+        const produkList = [
+            { nama: 'Oli Top 1', harga: 75000, stok: 10 },
+            { nama: 'Ban Motor', harga: 350000, stok: 5 },
+            { nama: 'Aki Motor', harga: 500000, stok: 3 },
+            { nama: 'Lampu Motor', harga: 150000, stok: 7 },
+            { nama: 'Filter Oli', harga: 45000, stok: 12 },
+        ];
+
+        // Data Servis
+        const serviceList = [
+            { nama: 'Ganti Oli', harga: 50000 },
+            { nama: 'Ganti Lampu', harga: 40000 },
+            { nama: 'Servis Mesin', harga: 120000 },
+            { nama: 'Tune Up', harga: 90000 },
+            { nama: 'Servis Rantai', harga: 60000 },
+        ];
+
+        // Data Mekanik
+        const mechanicList = [
+            { id: 1, nama: 'Andi' },
+            { id: 2, nama: 'Budi' },
+            { id: 3, nama: 'Citra' },
+            { id: 4, nama: 'Dedi' },
+        ];
+
+        // Keranjang Produk dan Servis
+        let cartProducts = [];
+        let cartServices = [];
+
+        // Referensi elemen
+        const searchProductInput = document.getElementById('searchProductInput');
+        const productSuggestions = document.getElementById('productSuggestions');
+        const btnAddProduct = document.getElementById('btnAddProduct');
+        const cartProductsBody = document.getElementById('cartProductsBody');
+
+        const searchServiceInput = document.getElementById('searchServiceInput');
+        const serviceSuggestions = document.getElementById('serviceSuggestions');
+        const mechanicSelectionDiv = document.getElementById('mechanicSelectionDiv');
+        const mechanicSelect = document.getElementById('mechanicSelect');
+        const btnAddService = document.getElementById('btnAddService');
+        const cartServicesBody = document.getElementById('cartServicesBody');
+
+        const discountInput = document.getElementById('discount');
+        const bayarInput = document.getElementById('bayar');
+        const subtotalProductsSpan = document.getElementById('subtotalProducts');
+        const subtotalServicesSpan = document.getElementById('subtotalServices');
+        const totalBayarSpan = document.getElementById('totalBayar');
+        const kembalianSpan = document.getElementById('kembalian');
+        const btnCetak = document.getElementById('btnCetak');
+        const btnReset = document.getElementById('btnReset');
+
+        // Variabel untuk pilihan saat ini
+        let selectedProduct = null;
+        let selectedService = null;
+
+        // Format Rupiah
+        function formatRupiah(angka) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(angka);
+        }
+
+        // ======= PRODUK =======
+        // Tampilkan 5 saran produk saat fokus input (kalau belum ketik apa-apa)
+        searchProductInput.addEventListener('focus', () => {
+            if (searchProductInput.value.trim().length === 0) {
+                showProductSuggestions(produkList.filter(p => !cartProducts.some(c => c.nama === p.nama)).slice(0, 5));
+            }
+        });
+
+        // Saat mengetik, filter saran produk
+        searchProductInput.addEventListener('input', () => {
+            const query = searchProductInput.value.trim().toLowerCase();
+            if (query.length === 0) {
+                productSuggestions.classList.add('d-none');
+                productSuggestions.innerHTML = '';
+                selectedProduct = null;
+                btnAddProduct.disabled = true;
+                return;
+            }
+            const filtered = produkList.filter(p => p.nama.toLowerCase().includes(query) && !cartProducts.some(c => c.nama === p.nama));
+            if (filtered.length === 0) {
+                productSuggestions.classList.add('d-none');
+                productSuggestions.innerHTML = '';
+                selectedProduct = null;
+                btnAddProduct.disabled = true;
+                return;
+            }
+            showProductSuggestions(filtered);
+        });
+
+        // Fungsi tampilkan saran produk
+        function showProductSuggestions(list) {
+            productSuggestions.innerHTML = list.map(p => `<div class="suggestion-item p-2">${p.nama} - ${formatRupiah(p.harga)}</div>`).join('');
+            productSuggestions.classList.remove('d-none');
+            Array.from(productSuggestions.children).forEach((el, i) => {
+                el.addEventListener('click', () => {
+                    selectedProduct = list[i];
+                    searchProductInput.value = selectedProduct.nama;
+                    btnAddProduct.disabled = false;
+                    productSuggestions.classList.add('d-none');
+                });
+            });
+        }
+
+        // Tambah produk ke keranjang
+        btnAddProduct.addEventListener('click', () => {
+            if (!selectedProduct) return;
+
+            // Cek stok
+            const inCart = cartProducts.find(p => p.nama === selectedProduct.nama);
+            if (selectedProduct.stok !== null && inCart && inCart.qty >= selectedProduct.stok) {
+                alert('Stok produk tidak mencukupi!');
+                return;
+            }
+
+            if (inCart) {
+                inCart.qty++;
+            } else {
+                cartProducts.push({ nama: selectedProduct.nama, harga: selectedProduct.harga, qty: 1 });
+            }
+            selectedProduct = null;
+            searchProductInput.value = '';
+            btnAddProduct.disabled = true;
+            renderCartProducts();
+            updateTotals();
+        });
+
+        // Render keranjang produk
+        function renderCartProducts() {
+            cartProductsBody.innerHTML = '';
+            cartProducts.forEach((item, idx) => {
+                const total = item.harga * item.qty;
+                cartProductsBody.innerHTML += `
+                <tr>
+                    <td>${item.nama}</td>
+                    <td>${formatRupiah(item.harga)}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeProductQty(${idx}, -1)">–</button>
+                            <span>${item.qty}</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeProductQty(${idx}, 1)">+</button>
+                        </div>
+                    </td>
+                    <td>${formatRupiah(total)}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="removeProduct(${idx})">🗑️</button></td>
+                </tr>
+                `;
+            });
+        }
+
+        // Ubah qty produk
+        function changeProductQty(idx, delta) {
+            const item = cartProducts[idx];
+            const produk = produkList.find(p => p.nama === item.nama);
+            if (delta > 0) {
+                if (produk.stok !== null && item.qty >= produk.stok) {
+                    alert('Stok produk tidak mencukupi!');
+                    return;
+                }
+                item.qty += delta;
+            } else {
+                item.qty += delta;
+                if (item.qty <= 0) {
+                    cartProducts.splice(idx, 1);
+                }
+            }
+            renderCartProducts();
+            updateTotals();
+        }
+        window.changeProductQty = changeProductQty;
+
+        // Hapus produk dari keranjang
+        function removeProduct(idx) {
+            cartProducts.splice(idx, 1);
+            renderCartProducts();
+            updateTotals();
+        }
+        window.removeProduct = removeProduct;
+
+        // ======= SERVIS =======
+        // Tampilkan 5 saran servis saat fokus input (kalau belum ketik apa-apa)
+        searchServiceInput.addEventListener('focus', () => {
+            if (searchServiceInput.value.trim().length === 0) {
+                showServiceSuggestions(serviceList.slice(0, 5));
+            }
+        });
+
+        // Saat mengetik, filter saran servis
+        searchServiceInput.addEventListener('input', () => {
+            const query = searchServiceInput.value.trim().toLowerCase();
+            if (query.length === 0) {
+                serviceSuggestions.classList.add('d-none');
+                serviceSuggestions.innerHTML = '';
+                mechanicSelectionDiv.style.display = 'none';
+                selectedService = null;
+                btnAddService.disabled = true;
+                return;
+            }
+            const filtered = serviceList.filter(s => s.nama.toLowerCase().includes(query));
+            if (filtered.length === 0) {
+                serviceSuggestions.classList.add('d-none');
+                serviceSuggestions.innerHTML = '';
+                mechanicSelectionDiv.style.display = 'none';
+                selectedService = null;
+                btnAddService.disabled = true;
+                return;
+            }
+            showServiceSuggestions(filtered);
+        });
+
+        // Fungsi tampilkan saran servis
+        function showServiceSuggestions(list) {
+            serviceSuggestions.innerHTML = list.map(s => `<div class="suggestion-item p-2">${s.nama} - ${formatRupiah(s.harga)}</div>`).join('');
+            serviceSuggestions.classList.remove('d-none');
+            Array.from(serviceSuggestions.children).forEach((el, i) => {
+                el.addEventListener('click', () => {
+                    selectedService = list[i];
+                    searchServiceInput.value = selectedService.nama;
+                    mechanicSelectionDiv.style.display = 'block';
+                    populateMechanics();
+                    btnAddService.disabled = true;
+                    serviceSuggestions.classList.add('d-none');
+                });
+            });
+        }
+
+        // Isi dropdown mekanik
+        function populateMechanics() {
+            mechanicSelect.innerHTML = '';
+            mechanicList.forEach(mekanik => {
+                const option = document.createElement('option');
+                option.value = mekanik.id;
+                option.textContent = mekanik.nama;
+                mechanicSelect.appendChild(option);
+            });
+        }
+
+        // Enable tombol tambah servis kalau ada service dan mekanik dipilih
+        mechanicSelect.addEventListener('change', () => {
+            btnAddService.disabled = !selectedService || !mechanicSelect.value;
+        });
+
+        // Tambah servis ke keranjang
+        btnAddService.addEventListener('click', () => {
+            if (!selectedService || !mechanicSelect.value) return;
+
+            const mekanikId = parseInt(mechanicSelect.value);
+            const mekanikNama = mechanicList.find(m => m.id === mekanikId).nama;
+
+            // Cek kombinasi unik servis + mekanik
+            const exists = cartServices.find(s => s.nama === selectedService.nama && s.mekanikId === mekanikId);
+            if (exists) {
+                alert('Kombinasi servis dan mekanik sudah ada di keranjang!');
+                return;
+            }
+
+            cartServices.push({
+                nama: selectedService.nama,
+                harga: selectedService.harga,
+                mekanikId,
+                mekanikNama,
+            });
+
+            selectedService = null;
+            searchServiceInput.value = '';
+            mechanicSelectionDiv.style.display = 'none';
+            btnAddService.disabled = true;
+
+            renderCartServices();
+            updateTotals();
+        });
+
+        // Render keranjang servis
+        function renderCartServices() {
+            cartServicesBody.innerHTML = '';
+            cartServices.forEach((item, idx) => {
+                cartServicesBody.innerHTML += `
+                <tr>
+                    <td>${item.nama}</td>
+                    <td>${item.mekanikNama}</td>
+                    <td>${formatRupiah(item.harga)}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="removeService(${idx})">🗑️</button></td>
+                </tr>
+                `;
+            });
+        }
+
+        // Hapus servis dari keranjang
+        function removeService(idx) {
+            cartServices.splice(idx, 1);
+            renderCartServices();
+            updateTotals();
+        }
+        window.removeService = removeService;
+
+        // ======= TOTAL & PEMBAYARAN =======
+        function updateTotals() {
+            const subtotalProduk = cartProducts.reduce((sum, i) => sum + i.harga * i.qty, 0);
+            const subtotalServis = cartServices.reduce((sum, i) => sum + i.harga, 0);
+            const diskon = parseInt(discountInput.value) || 0;
+            let total = subtotalProduk + subtotalServis - diskon;
+            if (total < 0) total = 0;
+
+            subtotalProductsSpan.innerText = formatRupiah(subtotalProduk);
+            subtotalServicesSpan.innerText = formatRupiah(subtotalServis);
+            totalBayarSpan.innerText = formatRupiah(total);
+
+            hitungKembalian();
+        }
+
+        function hitungKembalian() {
+            const total = cartProducts.reduce((sum, i) => sum + i.harga * i.qty, 0) + cartServices.reduce((sum, i) => sum + i.harga, 0) - (parseInt(discountInput.value) || 0);
+            const bayar = parseInt(bayarInput.value) || 0;
+            let kembali = bayar - total;
+            if (kembali < 0) kembali = 0;
+            kembalianSpan.innerText = formatRupiah(kembali);
+        }
+
+        discountInput.addEventListener('input', updateTotals);
+        bayarInput.addEventListener('input', hitungKembalian);
+
+        // Reset semua data
+        btnReset.addEventListener('click', () => {
+            if (!confirm('Batalkan transaksi dan kosongkan keranjang?')) return;
+            cartProducts = [];
+            cartServices = [];
+            selectedProduct = null;
+            selectedService = null;
+            searchProductInput.value = '';
+            searchServiceInput.value = '';
+            mechanicSelectionDiv.style.display = 'none';
+            btnAddProduct.disabled = true;
+            btnAddService.disabled = true;
+            renderCartProducts();
+            renderCartServices();
+            updateTotals();
+        });
+
+        // Cetak nota
+        btnCetak.addEventListener('click', () => {
+            if (cartProducts.length === 0 && cartServices.length === 0) {
+                alert('Keranjang kosong!');
+                return;
+            }
+            alert('Transaksi berhasil disimpan dan dicetak (simulasi)');
+            // TODO: implementasi simpan & cetak sesungguhnya
+        });
+
+        // Inisialisasi tampilan awal
+        renderCartProducts();
+        renderCartServices();
+        updateTotals();
+    </script>
+</body>
+
+</html>
